@@ -144,16 +144,16 @@ void* createLaneNetCudaBuffer(int64_t eltCount, DataType dtype, int run)
     size_t memSize = eltCount * elementSize(dtype);
     float* inputs = new float[eltCount];
 
-    cv::Mat rgbImage = cv::imread("/home/kai/Desktop/TensorRT-4.0.1.6/data/lanenet/image.png");
+    cv::Mat rgbImage = cv::imread("/home/kai/Desktop/TensorRT-4.0.1.6/data/lanenet/0000.png");
     cv::Mat image;
-	cv::cvtColor(rgbImage, image, CV_RGB2BGR);
-	cv::resize(image, image, cv::Size(INPUT_W, INPUT_H));
+    cv::cvtColor(rgbImage, image, CV_RGB2BGR);
+    cv::resize(image, image, cv::Size(INPUT_W, INPUT_H));
     //convert to ppm just for the file format
     std::vector<PPM> ppms(1); // only one image to test
 
     ppms[0].buffer = image.data;
-	ppms[0].h = INPUT_H;
-	ppms[0].w = INPUT_W;
+    ppms[0].h = INPUT_H;
+    ppms[0].w = INPUT_W;
     std::cout<< "image read.\n";
 
 	float* data = new float[ INPUT_C * INPUT_H * INPUT_W ];
@@ -191,11 +191,28 @@ void getOutput_instance_seg(int64_t eltCount, DataType dtype, void* buffer)
     float* outputs = new float[eltCount];
     CHECK(cudaMemcpy(outputs, buffer, memSize, cudaMemcpyDeviceToHost));
 
+    // make a txt for outputs
+    fstream fp;
+    fp.open("outputs.txt", ios::out);
+    int jjj = 0;
+    for(int i=0;i<INPUT_H; i++)
+    {
+        for(int j=0;j<INPUT_W;j++)
+        {
+            for(int k=0;k<(INPUT_C+1);k++)
+            {
+                fp << outputs[jjj] << " ";
+                jjj++;
+            }
+        }
+        fp << endl;
+    }
+
     cv::Mat back_image(INPUT_H, INPUT_W, CV_32FC3, cv::Scalar(255,0,0));
     
     cv::imshow("test_image", back_image);
     cv::waitKey(0);
-    cv::imwrite ("test.jpg ", back_image);
+    cv::imwrite ("test.jpg", back_image);
 
     float min_val_1=255, min_val_2=255, min_val_3=255;
     float max_val_1=0, max_val_2=0, max_val_3=0;
@@ -243,7 +260,7 @@ void getOutput_instance_seg(int64_t eltCount, DataType dtype, void* buffer)
 
     cv::imshow("back_image", back_image);
     cv::waitKey(0);
-    cv::imwrite ("output.jpg ", back_image);
+    cv::imwrite ("output.jpg", back_image);
     delete[] outputs;
 }
 
@@ -260,7 +277,7 @@ void getOutput_binary_seg(int64_t eltCount, DataType dtype, void* buffer)
     cv::Mat back_image(INPUT_H, INPUT_W, CV_32FC1, cv::Scalar(50));
     cv::imshow("gray_image", back_image);
     cv::waitKey(0);
-    cv::imwrite ("gray.jpg ", back_image);
+    cv::imwrite ("gray.jpg", back_image);
 
     // do argmax
     int iii = 0;
@@ -282,7 +299,7 @@ void getOutput_binary_seg(int64_t eltCount, DataType dtype, void* buffer)
 
     cv::imshow("final_image", back_image);
     cv::waitKey(0);
-    cv::imwrite ("final.jpg ", back_image);    
+    cv::imwrite ("final.jpg", back_image);    
     delete[] outputs;
 }
 
@@ -291,9 +308,6 @@ ICudaEngine* loadModelAndCreateEngine(const char* uffFile, int maxBatchSize,
 {
     IBuilder* builder = createInferBuilder(gLogger);
     INetworkDefinition* network = builder->createNetwork();
-    
-//    int num_of_layer = 1;
-//    printTensorDims(network, num_of_layer);
 
 #if 1
     if (!parser->parse(uffFile, *network, nvinfer1::DataType::kFLOAT))
@@ -303,8 +317,6 @@ ICudaEngine* loadModelAndCreateEngine(const char* uffFile, int maxBatchSize,
         RETURN_AND_LOG(nullptr, ERROR, "Fail to parse");
     builder->setFp16Mode(true);
 #endif
-
-    //std::cout << network->getNbLayers() << std::endl;
 
     /* we create the engine */
     builder->setMaxBatchSize(maxBatchSize);
@@ -350,6 +362,9 @@ void execute(ICudaEngine& engine)
 
     int iterations = 1;
     int numberRun = 1;
+
+    // read test image list
+
     for (int i = 0; i < iterations; i++)
     {
         float total = 0, ms;
